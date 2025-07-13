@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Attendance System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- SheetJS Library for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <h1>Smart Attendance System 📋✨</h1>
+    </header>
+    <!-- Buttons Section -->
+    <div class="button-container fade-in">
+        <button id="btn-live-video" class="btn">Live Video 🎥</button>
+        <button id="btn-attendance" class="btn">Attendance Records 📊</button>
+        <button id="all-attendance-btn" class="btn">Monthly Attendance 📅</button>
+    </div>
+    <!-- Main Content -->
+    <div class="main-content fade-in">
+        <!-- Live Video Feed -->
+        <div id="live-video" class="video-container">
+            <div class="spinner" id="video-spinner"></div>
+            <img src="{{ url_for('video_feed') }}" alt="Video Feed" onload="hideSpinner()" style="display: none;">
+        </div>
+        <!-- Attendance Records -->
+        <div id="attendance-table-section" style="display: none;">
+            <h2>Attendance Records 📊</h2>
+            <!-- Calendar Input -->
+            <div style="margin-bottom: 20px; display: flex; align-items: center;">
+                <label for="date-picker" style="margin-right: 10px;">Filter by Date:</label>
+                <input type="text" id="date-picker" placeholder="Select a date">
+                <button id="apply-filter-btn" style="margin-left: 10px;">Apply Filter 🔍</button>
+                <button id="reset-filter-btn" style="margin-left: 10px;">Reset Filter 🔄</button>
+            </div>
+            <table id="attendance-table">
+                <thead>
+                    <tr>
+                        <th>Name 👤</th>
+                        <th>Roll Number 🆔</th>
+                        <th>Department 🏫</th>
+                        <th>Timestamp ⏰</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Attendance rows will be dynamically added here -->
+                </tbody>
+            </table>
+        </div>
+        <!-- All Attendance Records -->
+        <div id="all-attendance-table-section" style="display: none;">
+            <h2>All Attendance Records 📅</h2>
+            <table id="all-attendance-table">
+                <thead>
+                    <tr>
+                        <th>Name 👤</th>
+                        <th>Roll Number 🆔</th>
+                        <th>Department 🏫</th>
+                        <th>Total Attendance (%) 📈</th>
+                        <th>Defaulter ❌</th> <!-- Added Defaulter Column -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Monthly attendance rows will be dynamically added here -->
+                </tbody>
+            </table>
+            <!-- Print Button -->
+            <button id="download-excel-btn" style="margin-top: 20px;">Download Excel 📥</button>
+        </div>
+    </div>
+    <!-- Footer -->
+    <footer>
+        <p>Made with ❤️ by Himanshu Ratnakar, Kiran Dipak Jadhav, Harsh Desai, Rasil Khan</p>
+    </footer>
+    <!-- Flatpickr JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script>
+        // Hide spinner and show video feed
+        function hideSpinner() {
+            const spinner = document.getElementById('video-spinner');
+            const videoFeed = document.querySelector('.video-container img');
+            spinner.style.display = 'none';
+            videoFeed.style.display = 'block';
+        }
+        // Fetch attendance data every 5 seconds and update the table
+        let allAttendanceData = []; // Store all attendance data globally
+        let intervalId = null; // To store the setInterval reference
+        function fetchAttendance() {
+            fetch('/get_attendance')
+                .then(response => response.json())
+                .then(data => {
+                    allAttendanceData = data; // Save all data globally
+                    displayAttendance(data); // Display all data initially
+                })
+                .catch(error => console.error('Error fetching attendance:', error));
+        }
+        // Display attendance data in the default table
+        function displayAttendance(data) {
+            const tbody = document.querySelector('#attendance-table tbody');
+            tbody.innerHTML = ''; // Clear existing rows
+            data.forEach(record => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${record.Name}</td>
+                    <td>${record['Roll Number']}</td>
+                    <td>${record.Department}</td>
+                    <td>${record.Timestamp}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        // Calculate total attendance percentage for each student
+        function calculateMonthlyAttendance(selectedMonth) {
+            const attendanceMap = {}; // To group attendance by student
+            const uniqueDates = new Set(); // To track unique dates in the selected month
+            // Group attendance data by student and count unique dates
+            allAttendanceData.forEach(record => {
+                const [year, month] = record.Timestamp.split('-'); // Extract year and month
+                const date = record.Timestamp.split('T')[0]; // Extract date (YYYY-MM-DD)
+                if (`${year}-${month}` === selectedMonth) {
+                    uniqueDates.add(date); // Add unique dates for the month
+                    const key = `${record.Name}|${record['Roll Number']}|${record.Department}`;
+                    if (!attendanceMap[key]) {
+                        attendanceMap[key] = new Set();
+                    }
+                    attendanceMap[key].add(date); // Track unique attendance days for the student
+                }
+            });
+            // Calculate total attendance percentage for each student
+            const totalDays = uniqueDates.size;
+            const monthlyAttendance = [];
+            for (const [key, dates] of Object.entries(attendanceMap)) {
+                const [name, rollNumber, department] = key.split('|');
+                const attendanceCount = dates.size;
+                const attendancePercentage = ((attendanceCount / totalDays) * 100).toFixed(2);
+                const isDefaulter = attendancePercentage < 75 ? "YES" : "NO"; // Check if attendance is below 75%
+                monthlyAttendance.push({ name, rollNumber, department, attendancePercentage, isDefaulter });
+            }
+            return monthlyAttendance;
+        }
+        // All Attendance Records Button
+        document.getElementById('all-attendance-btn').addEventListener('click', () => {
+            // Get the current year and month
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are zero-indexed
+            const selectedMonth = `${year}-${month}`;
+            // Calculate monthly attendance
+            const monthlyAttendance = calculateMonthlyAttendance(selectedMonth);
+            // Display the monthly attendance in the table
+            const tbody = document.querySelector('#all-attendance-table tbody');
+            tbody.innerHTML = ''; // Clear existing rows
+            monthlyAttendance.forEach(record => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${record.name}</td>
+                    <td>${record.rollNumber}</td>
+                    <td>${record.department}</td>
+                    <td>${record.attendancePercentage}%</td>
+                    <td>${record.isDefaulter}</td> <!-- Added Defaulter Status -->
+                `;
+                tbody.appendChild(row);
+            });
+            // Show the "All Attendance Records" section and hide others
+            document.getElementById('live-video').style.display = 'none';
+            document.getElementById('attendance-table-section').style.display = 'none';
+            document.getElementById('all-attendance-table-section').style.display = 'block';
+        });
+        // Download Excel Button
+        document.getElementById('download-excel-btn').addEventListener('click', () => {
+            // Get the current year and month
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are zero-indexed
+            const selectedMonth = `${year}-${month}`;
+            // Calculate monthly attendance
+            const monthlyAttendance = calculateMonthlyAttendance(selectedMonth);
+            // Prepare data for Excel
+            const excelData = monthlyAttendance.map(record => ({
+                Name: record.name,
+                Roll_Number: record.rollNumber,
+                Department: record.department,
+                Attendance_Percentage: record.attendancePercentage,
+                Defaulter: record.isDefaulter // Include Defaulter Status in Excel
+            }));
+            // Create a worksheet
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            // Create a workbook and append the worksheet
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
+            // Export the workbook as an Excel file
+            XLSX.writeFile(workbook, `Attendance_${selectedMonth}.xlsx`);
+        });
+        // Toggle visibility of sections
+        document.getElementById('btn-live-video').addEventListener('click', () => {
+            document.getElementById('live-video').style.display = 'block';
+            document.getElementById('attendance-table-section').style.display = 'none';
+            document.getElementById('all-attendance-table-section').style.display = 'none';
+        });
+        document.getElementById('btn-attendance').addEventListener('click', () => {
+            document.getElementById('live-video').style.display = 'none';
+            document.getElementById('attendance-table-section').style.display = 'block';
+            document.getElementById('all-attendance-table-section').style.display = 'none';
+            fetchAttendance(); // Fetch attendance data when the button is clicked
+        });
+        // Initialize the calendar
+        flatpickr("#date-picker", {
+            dateFormat: "Y-m-d", // Format: YYYY-MM-DD
+        });
+        // Apply Filter Button
+        document.getElementById('apply-filter-btn').addEventListener('click', () => {
+            const selectedDate = document.getElementById('date-picker').value;
+            if (!selectedDate) {
+                alert("Please select a date.");
+                return;
+            }
+            // Stop the automatic refresh
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+            // Apply the filter
+            filterAttendanceByDate(selectedDate);
+        });
+        // Reset Filter Button
+        document.getElementById('reset-filter-btn').addEventListener('click', () => {
+            // Restart the automatic refresh
+            if (!intervalId) {
+                intervalId = setInterval(fetchAttendance, 5000); // Refresh every 5 seconds
+            }
+            // Display all attendance data
+            displayAttendance(allAttendanceData);
+        });
+        // Fetch attendance immediately and then every 5 seconds
+        fetchAttendance();
+        intervalId = setInterval(fetchAttendance, 5000); /* Refresh every 5 seconds */
+    </script>
+</body>
+</html>
