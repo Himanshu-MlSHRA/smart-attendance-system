@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: smart-attendance-system
+    runtime: python
+    plan: free
+    buildCommand: ./render-build.sh
+    startCommand: gunicorn -w 1 --threads 8 --timeout 120 -b 0.0.0.0:$PORT server.app:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false

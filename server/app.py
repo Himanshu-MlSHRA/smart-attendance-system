@@ -402,6 +402,11 @@ def self_checkin():
     return jsonify({"faces": faces})
 
 
+@app.get("/api/health")
+def health():
+    return jsonify({"ok": True})
+
+
 # ---------------------------------------------------------------- frontend
 
 @app.get("/", defaults={"path": ""})

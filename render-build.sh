@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Update and install dependencies for dlib
-apt-get update && apt-get install -y cmake libopenblas-dev liblapack-dev libx11-dev
-
-# Python API + face recognition
+# Prebuilt dlib wheel: Render can't apt-get, and compiling dlib runs out of memory.
+pip install --upgrade pip
+pip install dlib-bin
+pip install --no-deps face-recognition==1.3.0
 pip install -r requirements.txt
 
 # React frontend, served by Flask from web/dist
