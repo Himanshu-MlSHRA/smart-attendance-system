@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #111111;
+  --color-paper: #fff6e5;
+  --color-cream: #fffdf7;
+  --color-sun: #ffd43b;
+  --color-pink: #ff7ab6;
+  --color-sky: #6ec6ff;
+  --color-lime: #a6f04a;
+  --color-tang: #ff8a3d;
+  --color-violet: #b69cff;
+  --color-tomato: #ff5a5a;
+
+  --font-display: "Archivo Black", "Arial Black", sans-serif;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+
+  --shadow-brut-sm: 2px 2px 0 0 var(--color-ink);
+  --shadow-brut: 4px 4px 0 0 var(--color-ink);
+  --shadow-brut-lg: 8px 8px 0 0 var(--color-ink);
+}
+
+@utility brut {
+  border: 3px solid var(--color-ink);
+  box-shadow: var(--shadow-brut);
+}
+
+@utility brut-lg {
+  border: 3px solid var(--color-ink);
+  box-shadow: var(--shadow-brut-lg);
+}
+
+@utility dots {
+  background-image: radial-gradient(var(--color-ink) 1.2px, transparent 1.2px);
+  background-size: 18px 18px;
+}
+
+@utility stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--color-ink) 0 2px,
+    transparent 2px 10px
+  );
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-paper);
+}
+
+::selection {
+  background: var(--color-pink);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 3px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
