@@ -4,6 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: ./render-build.sh
+    # One worker: the face model lives in memory and enrolling updates it in place.
     startCommand: gunicorn -w 1 --threads 8 --timeout 120 -b 0.0.0.0:$PORT server.app:app
     healthCheckPath: /api/health
     envVars:
@@ -13,3 +14,12 @@ services:
         generateValue: true
       - key: ADMIN_PASSWORD
         sync: false
+      - key: TIMEZONE
+        value: Asia/Kolkata
+      - key: SEED_DEMO
+        value: "1"
+    # The free plan's disk is wiped on every deploy/restart. On a paid plan, keep data with:
+    # disk:
+    #   name: data
+    #   mountPath: /var/data
+    # and add an env var DATA_DIR=/var/data

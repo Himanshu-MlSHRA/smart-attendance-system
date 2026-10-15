@@ -1,12 +1,14 @@
 import { animate, AnimatePresence, motion, useInView, useMotionValue, useTransform, type HTMLMotionProps } from 'motion/react'
-import { forwardRef, useEffect, useRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
+import { forwardRef, useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import { X } from 'lucide-react'
-import { accentFor, initials } from '../lib/format'
+import type { RosterStatus } from '../lib/api'
+import { accentFor, initials, statusLabel, statusTone } from '../lib/format'
+import { usePhoto } from '../lib/hooks'
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 export { cx }
 
-type Tone = 'sun' | 'pink' | 'sky' | 'lime' | 'tang' | 'violet' | 'tomato' | 'ink' | 'cream'
+export type Tone = 'sun' | 'pink' | 'sky' | 'lime' | 'tang' | 'violet' | 'tomato' | 'ink' | 'cream'
 
 const toneBg: Record<Tone, string> = {
   sun: 'bg-sun text-ink',
@@ -91,18 +93,196 @@ export function Badge({ tone = 'sun', children, className }: { tone?: Tone; chil
   )
 }
 
-export function Avatar({ name, seed, size = 'md' }: { name: string; seed?: string; size?: 'sm' | 'md' | 'lg' }) {
-  const sizes = { sm: 'size-8 text-xs', md: 'size-11 text-sm', lg: 'size-20 text-2xl' }
+/**
+ * A person's face crop when we have one (`photoId` = student id), otherwise
+ * initials on a colour that stays the same for them everywhere.
+ */
+export function Avatar({
+  name,
+  seed,
+  size = 'md',
+  photoId,
+  className,
+}: {
+  name: string
+  seed?: string
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+  photoId?: number | false
+  className?: string
+}) {
+  const sizes = { xs: 'size-6 text-[9px] border-2', sm: 'size-8 text-xs border-[3px]', md: 'size-11 text-sm border-[3px]', lg: 'size-20 text-2xl border-[3px]', xl: 'size-28 text-4xl border-4' }
+  const photo = usePhoto(photoId || undefined, Boolean(photoId))
   return (
     <span
       className={cx(
-        'inline-grid shrink-0 place-items-center border-[3px] border-ink font-display',
+        'relative inline-grid shrink-0 place-items-center overflow-hidden border-ink font-display',
         accentFor(seed ?? name),
         sizes[size],
+        className,
       )}
+      title={name}
     >
-      {initials(name)}
+      {photo ? <img src={photo} alt="" className="absolute inset-0 size-full object-cover" /> : initials(name)}
     </span>
+  )
+}
+
+export function StatusBadge({ status, className }: { status: RosterStatus; className?: string }) {
+  return (
+    <Badge tone={statusTone[status]} className={className}>
+      {statusIcon[status]} {statusLabel[status]}
+    </Badge>
+  )
+}
+
+const statusIcon: Record<RosterStatus, string> = { present: '✓', late: '◷', excused: '✉', absent: '✕', waiting: '…' }
+
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cx('animate-pulse border-[3px] border-ink/20 bg-ink/5', className)} aria-hidden />
+}
+
+/** Page-shaped placeholder while the first load is in flight. */
+export function PageSkeleton({ tiles = 4 }: { tiles?: number }) {
+  return (
+    <div className="space-y-6" role="status" aria-label="Loading">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {Array.from({ length: tiles }, (_, i) => (
+          <Skeleton key={i} className="h-32" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_1fr]">
+        <Skeleton className="h-72" />
+        <Skeleton className="h-72" />
+      </div>
+    </div>
+  )
+}
+
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+  id,
+}: {
+  value: T
+  onChange: (v: T) => void
+  options: readonly (readonly [T, ReactNode])[]
+  id: string
+}) {
+  return (
+    <div className="brut flex w-fit flex-wrap bg-cream" role="tablist">
+      {options.map(([v, label], i) => (
+        <button
+          key={v}
+          role="tab"
+          aria-selected={value === v}
+          onClick={() => onChange(v)}
+          className={cx('relative cursor-pointer px-3 py-2 text-sm font-bold uppercase', i > 0 && 'border-l-[3px] border-ink')}
+        >
+          {value === v && <motion.span layoutId={`seg-${id}`} className="absolute inset-0 bg-ink" transition={{ type: 'spring', stiffness: 500, damping: 38 }} />}
+          <span className={cx('relative flex items-center gap-1.5', value === v && 'text-cream')}>{label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Horizontal percentage bar with an optional threshold tick. */
+export function PercentBar({ value, threshold, className }: { value: number | null; threshold?: number; className?: string }) {
+  const danger = threshold !== undefined && value !== null && value < threshold
+  return (
+    <div className={cx('relative h-3.5 border-[3px] border-ink bg-paper', className)}>
+      <motion.div
+        className={cx('h-full', danger ? 'bg-tomato' : 'bg-lime')}
+        initial={{ width: 0 }}
+        animate={{ width: `${value ?? 0}%` }}
+        transition={{ type: 'spring', stiffness: 80, damping: 16, delay: 0.1 }}
+      />
+      {threshold !== undefined && (
+        <span className="absolute -inset-y-1 w-[3px] bg-ink" style={{ left: `${threshold}%` }} title={`${threshold}% required`} />
+      )}
+    </div>
+  )
+}
+
+export function Confirm({
+  open,
+  title,
+  children,
+  confirmLabel,
+  tone = 'tomato',
+  onConfirm,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  children: ReactNode
+  confirmLabel: string
+  tone?: Tone
+  onConfirm: () => Promise<unknown> | void
+  onClose: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <Modal open={open} onClose={onClose} title={title} tone={tone}>
+      <div className="space-y-4">
+        <div>{children}</div>
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <div className="flex justify-end gap-3">
+          <Button tone="cream" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            tone={tone}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              setError(null)
+              try {
+                await onConfirm()
+                onClose()
+              } catch (e) {
+                setError((e as Error).message)
+              } finally {
+                setBusy(false)
+              }
+            }}
+          >
+            {busy ? 'Working…' : confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+export function Textarea({ label, className, id, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: string }) {
+  const field = (
+    <textarea
+      id={id}
+      className={cx(
+        'w-full border-[3px] border-ink bg-cream px-3 py-2.5 font-medium shadow-brut-sm outline-none focus:bg-white focus:shadow-brut',
+        className,
+      )}
+      {...rest}
+    />
+  )
+  if (!label) return field
+  return (
+    <label className="block" htmlFor={id}>
+      <span className="mb-1.5 block font-mono text-xs font-bold uppercase tracking-wider">{label}</span>
+      {field}
+    </label>
+  )
+}
+
+export function SectionTitle({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b-[3px] border-ink px-5 py-4">
+      <h2 className="font-display text-xl uppercase sm:text-2xl">{children}</h2>
+      {aside}
+    </div>
   )
 }
 

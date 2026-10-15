@@ -1,14 +1,18 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { Camera, CameraOff } from 'lucide-react'
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import type { FaceResult } from '../lib/api'
 import type { CameraState } from '../lib/hooks'
 import { Button, cx } from './ui'
 
+const first = (f: FaceResult) => f.student?.name.split(' ')[0] ?? ''
+const score = (f: FaceResult) => (f.similarity !== null ? ` · ${f.similarity}%` : '')
+
 const statusStyle: Record<FaceResult['status'], { color: string; label: (f: FaceResult) => string }> = {
-  marked: { color: 'border-lime bg-lime', label: (f) => `Marked · ${f.student?.name ?? ''}` },
-  already: { color: 'border-sky bg-sky', label: (f) => `Already in · ${f.student?.name ?? ''}` },
+  marked: { color: 'border-lime bg-lime', label: (f) => `${f.late ? 'Late' : 'Marked'} · ${first(f)}${score(f)}` },
+  already: { color: 'border-sky bg-sky', label: (f) => `Already in · ${first(f)}` },
   mismatch: { color: 'border-tang bg-tang', label: () => 'Not you!' },
+  not_in_class: { color: 'border-violet bg-violet', label: (f) => `${first(f)} · not in this class` },
   unknown: { color: 'border-tomato bg-tomato', label: () => 'Unknown face' },
 }
 
@@ -23,6 +27,7 @@ export function Viewfinder({
   scanning,
   faces = [],
   className,
+  overlay,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>
   state: CameraState
@@ -30,6 +35,8 @@ export function Viewfinder({
   scanning?: boolean
   faces?: FaceResult[]
   className?: string
+  /** Extra layer drawn over the live picture (prompts, countdowns). */
+  overlay?: ReactNode
 }) {
   const live = state === 'live'
   return (
@@ -123,6 +130,7 @@ export function Viewfinder({
             />
             {scanning ? 'Scanning' : 'Paused'}
           </div>
+          {overlay}
         </>
       )}
     </div>

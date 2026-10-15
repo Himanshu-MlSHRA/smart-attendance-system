@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { api } from './api'
 
-/** Load data once (and again on `reload`). */
-export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
+/**
+ * Load data on mount and whenever `deps` change; `reload` refetches.
+ * With `poll` (ms) it also refetches quietly in the background while the tab is visible.
+ */
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = [], poll?: number) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const loadRef = useRef(load)
-  loadRef.current = load
+  useEffect(() => {
+    loadRef.current = load
+  })
 
   const reload = useCallback(() => {
     setLoading(true)
@@ -23,7 +29,15 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void reload(), deps)
 
-  return { data, error, loading, reload }
+  useEffect(() => {
+    if (!poll) return
+    const id = setInterval(() => {
+      if (!document.hidden) void reload()
+    }, poll)
+    return () => clearInterval(id)
+  }, [poll, reload])
+
+  return { data, error, loading, reload, setData }
 }
 
 export type CameraState = 'idle' | 'starting' | 'live' | 'denied' | 'unsupported'
@@ -75,4 +89,62 @@ export function useCamera() {
   useEffect(() => stop, [stop])
 
   return { videoRef, state, start, stop, capture }
+}
+
+// Face photos need the auth header, so they're fetched as blobs and cached per student.
+const photoCache = new Map<number, Promise<string | null>>()
+
+export function forgetPhoto(id: number) {
+  photoCache.delete(id)
+}
+
+export function usePhoto(id: number | undefined, enabled = true) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!id || !enabled) return
+    let live = true
+    if (!photoCache.has(id)) {
+      photoCache.set(
+        id,
+        api
+          .photo(id)
+          .then((b) => URL.createObjectURL(b))
+          .catch(() => null),
+      )
+    }
+    photoCache.get(id)!.then((u) => live && setUrl(u))
+    return () => {
+      live = false
+    }
+  }, [id, enabled])
+  return enabled ? url : null
+}
+
+/** Run `fn` on a keyboard shortcut like "mod+k" (mod = Ctrl or ⌘). */
+export function useHotkey(combo: string, fn: () => void) {
+  const fnRef = useRef(fn)
+  useEffect(() => {
+    fnRef.current = fn
+  })
+  useEffect(() => {
+    const [mod, key] = combo.includes('+') ? combo.split('+') : [null, combo]
+    const onKey = (e: KeyboardEvent) => {
+      if (mod === 'mod' && !(e.ctrlKey || e.metaKey)) return
+      if (e.key.toLowerCase() !== key) return
+      e.preventDefault()
+      fnRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [combo])
+}
+
+/** Ticks every `ms` so time-based UI (countdowns, "x min ago") re-renders. */
+export function useNow(ms = 1000) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), ms)
+    return () => clearInterval(id)
+  }, [ms])
+  return now
 }

@@ -1,10 +1,14 @@
 import { motion } from 'motion/react'
 import { ArrowRight, GraduationCap, ShieldCheck } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Logo } from '../components/Shell'
 import { Button, cx, ErrorNote, Input, Marquee } from '../components/ui'
-import type { Role } from '../lib/api'
+import { api, type DemoAccount } from '../lib/api'
 import { useAuth } from '../lib/auth'
+
+type Side = 'student' | 'staff'
+
+const demoTone: Record<string, string> = { Admin: 'bg-sky', Teacher: 'bg-violet', Student: 'bg-pink' }
 
 const stickers = [
   { text: 'NO PROXIES', className: 'bg-pink top-[14%] right-[8%] rotate-6' },
@@ -14,21 +18,23 @@ const stickers = [
 
 export default function Login() {
   const { login } = useAuth()
-  const [role, setRole] = useState<Role>('student')
+  const [role, setRole] = useState<Side>('student')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Only the demo accounts that really exist on this server (none on a real install).
+  const [demo, setDemo] = useState<DemoAccount[]>([])
+  useEffect(() => {
+    api.demoAccounts().then(setDemo).catch(() => {})
+  }, [])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      const user = await login(username.trim(), password)
-      if (user.role !== role) {
-        setRole(user.role)
-      }
+      await login(username.trim(), password)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -65,7 +71,7 @@ export default function Login() {
             transition={{ delay: 0.5 }}
             className="mt-8 max-w-md border-l-[6px] border-ink pl-4 text-lg font-medium"
           >
-            Walk past the camera, get marked present. Admins run the scanner; students track their own streak.
+            Walk past the camera, get marked present. Teachers run live classes; students check in with their face and a code on the board — and track their own streak.
           </motion.p>
 
           {stickers.map((s, i) => (
@@ -102,7 +108,7 @@ export default function Login() {
               {(
                 [
                   ['student', 'Student', GraduationCap, 'bg-pink'],
-                  ['admin', 'Admin', ShieldCheck, 'bg-sky'],
+                  ['staff', 'Staff', ShieldCheck, 'bg-sky'],
                 ] as const
               ).map(([value, label, Icon, tone]) => (
                 <button
@@ -114,7 +120,7 @@ export default function Login() {
                   }}
                   className={cx(
                     'relative flex cursor-pointer items-center justify-center gap-2 py-3.5 font-bold uppercase',
-                    value === 'admin' && 'border-l-[3px] border-ink',
+                    value === 'staff' && 'border-l-[3px] border-ink',
                   )}
                   aria-pressed={role === value}
                 >
@@ -129,19 +135,19 @@ export default function Login() {
 
             <form onSubmit={submit} className="space-y-5 p-6 sm:p-8">
               <div>
-                <h2 className="font-display text-3xl uppercase">{role === 'admin' ? 'Admin desk' : 'Hey, student'}</h2>
+                <h2 className="font-display text-3xl uppercase">{role === 'staff' ? 'Staff room' : 'Hey, student'}</h2>
                 <p className="mt-1 text-ink/70">
-                  {role === 'admin'
-                    ? 'Run scans, manage students and fix records.'
+                  {role === 'staff'
+                    ? 'Teachers and admins: run classes, review requests, fix records.'
                     : 'Sign in with your roll number. First time? Your password is your roll number too.'}
                 </p>
               </div>
               <Input
                 id="username"
-                label={role === 'admin' ? 'Username' : 'Roll number'}
+                label={role === 'staff' ? 'Username' : 'Roll number'}
                 autoComplete="username"
                 inputMode={role === 'student' ? 'numeric' : undefined}
-                placeholder={role === 'admin' ? 'admin' : 'e.g. 231417'}
+                placeholder={role === 'staff' ? 'e.g. t.sharma' : 'e.g. 231417'}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -159,7 +165,7 @@ export default function Login() {
               {error && <ErrorNote>{error}</ErrorNote>}
               <Button
                 type="submit"
-                tone={role === 'admin' ? 'sky' : 'pink'}
+                tone={role === 'staff' ? 'sky' : 'pink'}
                 size="lg"
                 className="w-full"
                 disabled={busy}
@@ -167,11 +173,36 @@ export default function Login() {
               >
                 {busy ? 'Checking…' : 'Sign in'}
               </Button>
+              {demo.length > 0 && (
+              <div className="border-t-[3px] border-dashed border-ink/30 pt-4">
+                <p className="mb-2 font-mono text-[11px] font-bold tracking-wider uppercase">Try a demo account</p>
+                <div className="flex flex-wrap gap-2">
+                  {demo.map((d) => (
+                    <motion.button
+                      key={d.username}
+                      type="button"
+                      whileHover={{ y: -2, rotate: -1 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        setRole(d.label === 'Student' ? 'student' : 'staff')
+                        setUsername(d.username)
+                        setPassword(d.password)
+                        setError(null)
+                      }}
+                      className={cx('cursor-pointer border-[3px] border-ink px-2.5 py-1 text-left shadow-brut-sm', demoTone[d.label])}
+                    >
+                      <span className="block text-xs font-bold uppercase">{d.label}</span>
+                      <span className="block font-mono text-[11px]">{d.username}</span>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+              )}
             </form>
           </motion.div>
         </section>
       </div>
-      <Marquee items={['Face recognition', 'Live scanner', 'Group photo upload', 'Streaks', 'Defaulter alerts', 'CSV export']} />
+      <Marquee items={['Face recognition', 'Blink liveness', 'Rotating class codes', 'Live roster', 'Leave requests', 'Heatmaps', 'Defaulter alerts', 'Audit log']} />
     </div>
   )
 }

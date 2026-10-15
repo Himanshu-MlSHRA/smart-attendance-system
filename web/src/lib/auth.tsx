@@ -5,10 +5,16 @@ interface AuthState {
   user: User | null
   loading: boolean
   login: (username: string, password: string) => Promise<User>
+  changePassword: (current: string, next: string) => Promise<void>
   logout: () => void
 }
 
 const AuthContext = createContext<AuthState | null>(null)
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const isStaff = (user: User | null) => user?.role === 'admin' || user?.role === 'teacher'
+// eslint-disable-next-line react-refresh/only-export-components
+export const homeFor = (user: User | null) => (!user ? '/login' : user.role === 'student' ? '/me' : '/staff')
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -36,12 +42,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.user
   }, [])
 
+  // A password change signs out every other session and hands this one a new token.
+  const changePassword = useCallback(async (current: string, next: string) => {
+    const res = await api.changePassword(current, next)
+    token.set(res.token)
+    setUser(res.user)
+  }, [])
+
   const logout = useCallback(() => {
     token.set(null)
     setUser(null)
   }, [])
 
-  return <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading, login, changePassword, logout }}>{children}</AuthContext.Provider>
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

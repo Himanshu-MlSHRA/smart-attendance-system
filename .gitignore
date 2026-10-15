@@ -6,3 +6,6 @@ node_modules/
 web/dist/
 attendance.db
 uploads/
+unknown_faces/
+trained_model/*.tmp
+.pytest_cache/
